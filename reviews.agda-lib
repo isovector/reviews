@@ -1,0 +1,5 @@
+name: reviews
+include:
+  agda-src
+depend:
+  standard-library
