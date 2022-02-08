@@ -213,31 +213,28 @@ wither Empty = Nil
 wither (Node (_, Nil) a (r, _)) = a :> (Left r)
 wither (Node (_, b :> l') a (r, _)) = b :> Right (Node l' a r)
 
-grow :: Ord a => Mu (Unsorted a) -> Nu (Tree a)
-grow = cata $ apo $ sprout . fmap (id &&& unNu)
-
 grow' :: Ord a => Mu (Unsorted a) -> Nu (Tree a)
-grow' = ana $ para $ fmap (either id Mu) . sprout
+grow' = cata $ apo $ sprout . fmap (id &&& unNu)
+
+grow :: Ord a => Mu (Unsorted a) -> Nu (Tree a)
+grow = ana $ para $ fmap (either id Mu) . sprout
 
 flatten :: Mu (Tree a) -> Nu (Sorted a)
 flatten = cata $ apo $ wither . fmap (id &&& unNu)
 
 flatten' :: Mu (Tree a) -> Nu (Sorted a)
-flatten' = cata $ apo $ wither . fmap (id &&& unNu)
+flatten' = ana $ para $ fmap (either id Mu) . wither
 
-quickTree :: SortingFunc a
-quickTree = flatten . downcast . grow'
+quickTree :: Ord a => [a] -> [a]
+quickTree = fromNu . flatten . downcast . grow' . toMu
 
-treeQuick :: SortingFunc a
-treeQuick = flatten' . downcast . grow
+treeQuick :: Ord a => [a] -> [a]
+treeQuick = fromNu . flatten' . downcast . grow . toMu
 
 runSort :: Ord a => SortingFunc a -> [a] -> [a]
 runSort f = fromNu . f . toMu
 
-quickSort, treeSort :: SortingFunc a
-quickSort = flatten  . downcast . grow
-treeSort  = flatten' . downcast . grow'
-
-big :: [Int]
-big = [0..1024]
+quickSort, treeSort :: Ord a => [a] -> [a]
+quickSort = fromNu . flatten  . downcast . grow . toMu
+treeSort  = fromNu . flatten' . downcast . grow' . toMu
 
