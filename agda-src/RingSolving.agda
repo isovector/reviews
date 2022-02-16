@@ -119,6 +119,16 @@ module _ (A : Set) where
     ∎
     where open Eq.≡-Reasoning
 
+  swap2-+A : ∀ m n p → m +A (n +A p) ≡ n +A (m +A p)
+  swap2-+A m n p =
+    begin
+      m +A (n +A p)  ≡⟨ +A-assoc m n p ⟩
+      (m +A n) +A p  ≡⟨ cong ( _+A p) $ +A-comm m n ⟩
+      (n +A m) +A p  ≡⟨ sym $ +A-assoc n m p ⟩
+      n +A (m +A p)
+    ∎
+    where open Eq.≡-Reasoning
+
   swap2-*A : ∀ m n p → m *A (n *A p) ≡ n *A (m *A p)
   swap2-*A m n p  =
     begin
@@ -203,39 +213,73 @@ module _ (A : Set) where
       rhs = ((x +A (a *A ej)) *A (a *A ek))
       xka = x *A evaluate k a
 
+      more : (x +A (a *A ej)) *A (a *A ek) ≡ a *A ((x *A ek) +A (ej *A (a *A ek)))
+      more =
+        let lhs = x +A a *A ej
+            cng = cong (a *A_)
+            cng' = cong (\ φ → a *A ((x *A ek) +A φ))
+        in
+        begin
+          lhs *A (a *A ek)                     ≡⟨ cong (lhs *A_) $ *A-comm a ek ⟩
+          lhs *A (ek *A a)                     ≡⟨ *A-assoc lhs ek a ⟩
+          (lhs *A ek) *A a                     ≡⟨ *A-comm (lhs *A ek) a ⟩
+          a *A (lhs *A ek)                     ≡⟨ cng $ *A-comm lhs ek ⟩
+          a *A (ek *A lhs)                     ≡⟨⟩
+          a *A (ek *A (x +A a *A ej))          ≡⟨ cng $ *A-+A-distrib ek x (a *A ej) ⟩
+          a *A ((ek *A x) +A ek *A (a *A ej))  ≡⟨ cng $ cong (\ φ → φ +A ek *A (a *A ej)) $ *A-comm ek x ⟩
+          a *A ((x *A ek) +A ek *A (a *A ej))  ≡⟨ cng' $ cong (ek *A_) $ *A-comm a ej ⟩
+          a *A ((x *A ek) +A ek *A (ej *A a))  ≡⟨ cng' $ swap2-*A ek ej a ⟩
+          a *A ((x *A ek) +A ej *A (ek *A a))  ≡⟨ cng' $ cong (ej *A_) $ *A-comm ek a ⟩
+          a *A ((x *A ek) +A ej *A (a *A ek))
+        ∎
+
+      owch : ∀ {m n} j k → evaluate (_*H_ {m} {n} j k) a ≡ evaluate (_*H_ {n} {m} k j) a
+      owch (PC x) (PC x₁) = *A-comm x x₁
+      owch (PC x) (PX {n} x₁ k) rewrite +-identityʳ n =
+        begin
+          x *A x₁ +A a *A evaluate (scalMapHorner (x *A_) k) a  ≡⟨ cong (\ φ → φ +A a *A evaluate (scalMapHorner (x *A_) k) a) $ *A-comm x x₁ ⟩
+          x₁ *A x +A a *A evaluate (scalMapHorner (x *A_) k) a  ≡⟨ cong (\ φ → x₁ *A x +A a *A evaluate (scalMapHorner φ k) a) $ extensionality (\z → *A-comm x z) ⟩
+          x₁ *A x +A a *A evaluate (scalMapHorner (_*A x) k) a
+        ∎
+      owch (PX {m} x j) (PC x₁) rewrite +-identityʳ m =
+        begin
+          x *A x₁ +A a *A evaluate (scalMapHorner (_*A x₁) j) a  ≡⟨ cong (\ φ → φ +A a *A evaluate (scalMapHorner (_*A x₁) j) a) $ *A-comm x x₁ ⟩
+          x₁ *A x +A a *A evaluate (scalMapHorner (_*A x₁) j) a  ≡⟨ cong (\ φ → x₁ *A x +A a *A evaluate (scalMapHorner φ j) a) $ extensionality (\z → *A-comm z x₁) ⟩
+          x₁ *A x +A a *A evaluate (scalMapHorner (x₁ *A_ ) j) a
+        ∎
+      owch (PX {m} x j) (PX {n} x₁ k) rewrite sym $ is-lt m n =
+        begin
+          evaluate (PX x j *H PX x₁ k) a
+        ≡⟨ ? ⟩
+          evaluate (PX x₁ k *H PX x j) a
+        ∎
+
       remainder : a *A (y *A ej) +A rhs ≡ a *A evaluate (hk +H jhk) a
       remainder =
         begin
-          (a *A (y *A ej)) +A rhs
-        ≡⟨⟩
-          (a *A (y *A ej)) +A ((x +A (a *A ej)) *A (a *A ek))
-        ≡⟨ ? ⟩
-          a *A ((x *A ek) +A ((x₁ +A (a *A ek)) *A ej))
-        ≡⟨⟩
-          a *A (xka +A ((x₁ +A (a *A ek)) *A ej))
-        ≡⟨⟩
-          a *A (xka +A ((x₁ +A (a *A evaluate k a)) *A ej))
-        ≡⟨⟩
-          a *A (xka +A (evaluate (PX x₁ k) a *A ej))
-        ≡⟨⟩
-          a *A (xka +A (evaluate (PX x₁ k) a *A evaluate j a))
-        ≡⟨ cong (\ φ → a *A (xka +A φ)) $ *A-*H-homo (PX x₁ k) j a ⟩
-          a *A (xka +A evaluate (PX x₁ k *H j) a)
-        ≡⟨ ? ⟩
-          a *A (xka +A evaluate (j *H PX x₁ k) a)
-        ≡⟨⟩
-          a *A (xka +A evaluate jhk a)
-        ≡⟨⟩
-          a *A ((x *A evaluate k a) +A evaluate jhk a)
-        ≡⟨ ? ⟩
-          a *A (evaluate (scalMapHorner (x *A_) k) a +A evaluate jhk a)
-        ≡⟨⟩
-          a *A (evaluate hk a +A evaluate jhk a)
-        ≡⟨ ? ⟩
+          (a *A (y *A ej)) +A rhs                                       ≡⟨⟩
+          (a *A (y *A ej)) +A ((x +A (a *A ej)) *A (a *A ek))           ≡⟨ cong (\ φ → (a *A (y *A ej)) +A φ) more ⟩
+          (a *A (y *A ej)) +A (a *A ((x *A ek) +A (ej *A (a *A ek))))   ≡⟨ sym $ *A-+A-distrib a (y *A ej) ((x *A ek) +A (ej *A (a *A ek))) ⟩
+          a *A ((y *A ej) +A ((x *A ek) +A (ej *A (a *A ek))))          ≡⟨ cng $ swap2-+A (y *A ej) (x *A ek) (ej *A (a *A ek))⟩
+          a *A ((x *A ek) +A ((y *A ej) +A (ej *A (a *A ek))))          ≡⟨ cng' $ cong (\ φ → (φ +A (ej *A (a *A ek)))) $ *A-comm y ej ⟩
+          a *A ((x *A ek) +A ((ej *A y) +A (ej *A (a *A ek))))          ≡⟨ cng' $ sym $ *A-+A-distrib ej y (a *A ek) ⟩
+          a *A ((x *A ek) +A (ej *A (y +A (a *A ek))))                  ≡⟨ cng' $ *A-comm ej (y +A (a *A ek)) ⟩
+          a *A ((x *A ek) +A ((y +A (a *A ek)) *A ej))                  ≡⟨⟩
+          a *A (xka +A ((x₁ +A (a *A ek)) *A ej))                       ≡⟨⟩
+          a *A (xka +A ((x₁ +A (a *A evaluate k a)) *A ej))             ≡⟨⟩
+          a *A (xka +A (evaluate (PX x₁ k) a *A ej))                    ≡⟨⟩
+          a *A (xka +A (evaluate (PX x₁ k) a *A evaluate j a))          ≡⟨ cong (\ φ → a *A (xka +A φ)) $ *A-*H-homo (PX x₁ k) j a ⟩
+          a *A (xka +A evaluate (PX x₁ k *H j) a)                       ≡⟨ cng' $ owch (PX x₁ k) j ⟩
+          a *A (xka +A evaluate (j *H PX x₁ k) a)                       ≡⟨⟩
+          a *A (xka +A evaluate jhk a)                                  ≡⟨⟩
+          a *A ((x *A evaluate k a) +A evaluate jhk a)                  ≡⟨ cng $ cong (_+A evaluate jhk a) $ scale-evaluate x k a ⟩
+          a *A (evaluate (scalMapHorner (x *A_) k) a +A evaluate jhk a) ≡⟨⟩
+          a *A (evaluate hk a +A evaluate jhk a)                        ≡⟨ cng $ +A-+H-homo hk jhk a ⟩
           a *A evaluate (hk +H jhk) a
         ∎
-      -- xtx +A   ≡⟨ cong (\ φ → xtx +A φ) $ sym $ *A-+A-distrib a (evaluate hk a) (evaluate jhk a) ⟩
-      -- xtx +A (a *A (evaluate hk a +A evaluate jhk a))         ≡⟨ cong (\ φ → xtx +A (a *A φ)) $ +A-+H-homo hk jhk a ⟩
+        where
+          cng = cong (a *A_)
+          cng' = cong (\ φ → a *A (xka +A φ))
 
   isoToConstruction : {N : ℕ} → (x : Poly N) → (a : A) → construct x a ≡ evaluate (normalize x) a
   isoToConstruction (con x) a = refl
