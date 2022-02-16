@@ -233,6 +233,10 @@ module _ (A : Set) where
           a *A ((x *A ek) +A ej *A (a *A ek))
         ∎
 
+      postulate
+        -- TODO(sandy): a damn nightmare to prove
+        owch' : ∀ {m n} x xs y ys → evaluate (_*H_ (PX {m} x xs) (PX {n} y ys)) a ≡ evaluate (_*H_ (PX {n} y ys) (PX {m} x xs)) a
+
       owch : ∀ {m n} j k → evaluate (_*H_ {m} {n} j k) a ≡ evaluate (_*H_ {n} {m} k j) a
       owch (PC x) (PC x₁) = *A-comm x x₁
       owch (PC x) (PX {n} x₁ k) rewrite +-identityʳ n =
@@ -247,10 +251,10 @@ module _ (A : Set) where
           x₁ *A x +A a *A evaluate (scalMapHorner (_*A x₁) j) a  ≡⟨ cong (\ φ → x₁ *A x +A a *A evaluate (scalMapHorner φ j) a) $ extensionality (\z → *A-comm z x₁) ⟩
           x₁ *A x +A a *A evaluate (scalMapHorner (x₁ *A_ ) j) a
         ∎
-      owch (PX {m} x j) (PX {n} x₁ k) rewrite sym $ is-lt m n =
+      owch (PX {m} x j) (PX {n} x₁ k) =
         begin
           evaluate (PX x j *H PX x₁ k) a
-        ≡⟨ ? ⟩
+        ≡⟨ owch' x j x₁ k ⟩
           evaluate (PX x₁ k *H PX x j) a
         ∎
 
