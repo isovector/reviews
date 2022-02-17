@@ -28,18 +28,18 @@ module _ (A : Set) where
     _+A_ : A → A → A
     _*A_ : A → A → A
 
-  data Poly : ℕ →  Set where
-    con : A → Poly 0
-    var : Poly 1
-    _:+_ : {m n : ℕ} → Poly m → Poly n → Poly (m ⊔ n)
-    _:*_ : {m n : ℕ} → Poly m → Poly n → Poly (m + n)
+  data Poly : Set where
+    con : A → Poly
+    var : Poly
+    _:+_ : Poly → Poly → Poly
+    _:*_ : Poly → Poly → Poly
 
 
-  data Horner : ℕ → Set where
-    PC : A → Horner 0
-    PX : {n : ℕ} → A → Horner n → Horner (suc n)
+  data Horner : Set where
+    PC : A → Horner
+    PX : A → Horner → Horner
 
-  scalMapHorner : {M : ℕ} → (A → A) → Horner M → Horner M
+  scalMapHorner : (A → A) → Horner → Horner
   scalMapHorner f (PC x) = PC (f x)
   scalMapHorner f (PX x xs) = PX (f x) (scalMapHorner f xs)
 
@@ -62,9 +62,19 @@ module _ (A : Set) where
     *A-annhiliate-r : ∀ m → m *A #0 ≡ #0
     *A-annhiliate-l : ∀ m → #0 *A m ≡ #0
 
+  *A-+A-distrib′ : ∀ m n p → (m +A n) *A p ≡ m *A p +A n *A p
+  *A-+A-distrib′ m n p =
+    begin
+      (m +A n) *A p ≡⟨ *A-comm (m +A n) p ⟩
+      p *A (m +A n) ≡⟨ *A-+A-distrib p m n ⟩
+      p *A m +A p *A n ≡⟨ cong₂ (_+A_) (*A-comm p m) (*A-comm p n) ⟩
+      m *A p +A n *A p
+    ∎
+    where open ≡-Reasoning
+
   {-# REWRITE +A-id-l *A-id-l +A-id-r *A-id-r *A-annhiliate-r *A-annhiliate-l +A-assoc *A-assoc *A-+A-distrib #-}
 
-  _+H_ : {M N : ℕ} → Horner M → Horner N → Horner (M ⊔ N)
+  _+H_ : Horner → Horner → Horner
   _+H_ (PC x) (PC y) = PC (x +A y)
   _+H_ (PC x) (PX y ys) = PX (x +A y) ys
   _+H_ (PX x xs) (PC y) = PX (x +A y) xs
@@ -79,29 +89,27 @@ module _ (A : Set) where
     ∎
     where open ≤-Reasoning
 
-  _*H_ : {M N : ℕ} → Horner M → Horner N → Horner (M Data.Nat.+ N)
+  _*H_ : Horner  → Horner → Horner
   _*H_ (PC x) y = scalMapHorner (x *A_) y
-  _*H_ (PX {m} x xs) (PC y) rewrite +-identityʳ m = scalMapHorner (_*A y) (PX x xs)
-  _*H_ (PX {m} x xs) yy@(PX {n} y ys) rewrite sym (is-lt m n) =
-    _+H_ (scalMapHorner (x *A_) yy) (PX #0 (_*H_ xs yy))
+  _*H_ (PX x xs) y = (scalMapHorner (x *A_) y) +H (PX #0 (xs *H y))
 
-  evaluate : {N : ℕ} → Horner N → A → A
+  evaluate : Horner → A → A
   evaluate (PC x) v = x
   evaluate (PX x xs) v = x +A (v *A evaluate xs v)
 
-  varH : Horner 1
+  varH : Horner
   varH = PX #0 $ PC #1
 
-  conH : A → Horner 0
+  conH : A → Horner
   conH = PC
 
-  construct : {N : ℕ} → Poly N → A → A
+  construct : Poly → A → A
   construct (con x) a = x
   construct var a = a
   construct (p :+ p2) a = construct p a +A construct p2 a
   construct (p :* p2) a = construct p a *A construct p2 a
 
-  normalize : {N : ℕ} → Poly N → Horner N
+  normalize : Poly → Horner
   normalize (con x) = conH x
   normalize var = varH
   normalize (x :+ y) = normalize x +H normalize y
@@ -139,7 +147,7 @@ module _ (A : Set) where
     ∎
     where open Eq.≡-Reasoning
 
-  +A-+H-homo : ∀ {m n} j k a → evaluate {m} j a +A evaluate {n} k a ≡ evaluate (j +H k) a
+  +A-+H-homo : ∀ j k a → evaluate j a +A evaluate k a ≡ evaluate (j +H k) a
   +A-+H-homo (PC x) (PC x₁) a = refl
   +A-+H-homo (PC x) (PX x₁ k) a = refl
   +A-+H-homo (PX x x₁) (PC x₂) a =
@@ -157,7 +165,7 @@ module _ (A : Set) where
     ∎
     where open Eq.≡-Reasoning
 
-  scale-evaluate : ∀ {n} x k a → x *A evaluate {n} k a ≡ evaluate {n} (scalMapHorner (x *A_) k) a
+  scale-evaluate : ∀ x k a → x *A evaluate k a ≡ evaluate (scalMapHorner (x *A_) k) a
   scale-evaluate x (PC x₁) a = refl
   scale-evaluate x (PX x₁ k) a =
     begin
@@ -171,121 +179,20 @@ module _ (A : Set) where
     ∎
     where open Eq.≡-Reasoning
 
-
-  *A-*H-homo : ∀ {m n} j k a → evaluate {m} j a *A evaluate {n} k a ≡ evaluate (j *H k) a
-  *A-*H-homo (PC x) (PC x₁) a = refl
-  *A-*H-homo (PC x) (PX x₁ k) a = cong (\ φ → (x *A x₁) +A φ) $
+  *A-*H-homo : ∀ j k a → evaluate j a *A evaluate k a ≡ evaluate (j *H k) a
+  *A-*H-homo (PC x) k a = scale-evaluate x k a
+  *A-*H-homo (PX x j) k a =
     begin
-      x *A (a *A evaluate k a)  ≡⟨ swap2-*A x a $ evaluate k a ⟩
-      a *A (x *A evaluate k a)  ≡⟨ cong (a *A_) $ scale-evaluate x k a ⟩
-      a *A evaluate (scalMapHorner (x *A_) k) a
+      evaluate (PX x j) a *A evaluate k a             ≡⟨⟩
+      (x +A a *A evaluate j a) *A evaluate k a        ≡⟨ *A-+A-distrib′ x (a *A evaluate j a) (evaluate k a) ⟩
+      x *A (evaluate k a) +A (a *A evaluate j a) *A evaluate k a        ≡⟨ cong₂ _+A_ (scale-evaluate x k a) (cong (a *A_) (*A-*H-homo j k a)) ⟩
+      evaluate (scalMapHorner (_*A_ x) k) a +A evaluate (PX #0 (j *H k)) a ≡⟨ +A-+H-homo (scalMapHorner (_*A_ x) k) (PX #0 (j *H k)) a ⟩
+      evaluate (scalMapHorner (_*A_ x) k +H PX #0 (j *H k)) a ≡⟨⟩
+      evaluate (PX x j *H k) a
     ∎
     where open Eq.≡-Reasoning
-  *A-*H-homo (PX {m} x j) (PC x₁) a rewrite +-identityʳ m =
-    begin
-      (x +A a *A evaluate j a) *A x₁                             ≡⟨ *A-comm (x +A (a *A evaluate j a)) x₁ ⟩
-      x₁ *A (x +A (a *A evaluate j a))                           ≡⟨ *A-+A-distrib x₁ x (a *A evaluate j a) ⟩
-      (x₁ *A x) +A (x₁ *A (a *A evaluate j a))                   ≡⟨ cong (\ φ → (x₁ *A x) +A φ) $ swap2-*A x₁ a $ evaluate j a ⟩
-      (x₁ *A x) +A (a *A (x₁ *A evaluate j a))                   ≡⟨ cong (\ φ → (x₁ *A x) +A (a *A φ)) $ scale-evaluate x₁ j a ⟩
-      (x₁ *A x) +A (a *A evaluate (scalMapHorner (x₁ *A_) j) a)  ≡⟨ cong (\ φ → φ +A (a *A evaluate (scalMapHorner (x₁ *A_) j) a) ) $ *A-comm x₁ x ⟩
-      (x *A x₁) +A (a *A evaluate (scalMapHorner (x₁ *A_) j) a)  ≡⟨ cong (\ φ → (x *A x₁) +A (a *A evaluate (scalMapHorner φ j) a)) $ extensionality (\z → *A-comm x₁ z) ⟩
-      (x *A x₁) +A (a *A evaluate (scalMapHorner (_*A x₁) j) a)
-    ∎
-    where open Eq.≡-Reasoning
-  *A-*H-homo (PX {m} x j) (PX {n} x₁ k) a rewrite sym (is-lt m n) =
-    begin
-      ((x +A (a *A ej)) *A x₁) +A rhs    ≡⟨ cong (_+A rhs) $ *A-comm (x +A (a *A ej)) y ⟩
-      (y *A (x +A (a *A ej))) +A rhs     ≡⟨ cong (_+A rhs) $ *A-+A-distrib y x (a *A ej) ⟩
-      (y *A x +A y *A (a *A ej)) +A rhs  ≡⟨ cong (\ φ → (φ +A y *A (a *A ej)) +A rhs) $ *A-comm y x ⟩
-      (xtx +A y *A (a *A ej)) +A rhs     ≡⟨ cong (\ φ → (xtx +A φ) +A rhs) $ swap2-*A y a ej ⟩
-      (xtx +A a *A (y *A ej)) +A rhs     ≡⟨ +A-assoc xtx (a *A (y *A ej)) rhs ⟩
-      xtx +A (a *A (y *A ej) +A rhs)     ≡⟨ cong (xtx +A_) remainder ⟩
-      xtx +A (a *A evaluate (hk +H jhk) a)
-    ∎
-    where
-      open Eq.≡-Reasoning
-      ej = evaluate j a
-      ek = evaluate k a
-      hk = scalMapHorner (x *A_) k
-      jhk = j *H PX x₁ k
-      xtx = x *A x₁
-      y = x₁
-      rhs = ((x +A (a *A ej)) *A (a *A ek))
-      xka = x *A evaluate k a
 
-      more : (x +A (a *A ej)) *A (a *A ek) ≡ a *A ((x *A ek) +A (ej *A (a *A ek)))
-      more =
-        let lhs = x +A a *A ej
-            cng = cong (a *A_)
-            cng' = cong (\ φ → a *A ((x *A ek) +A φ))
-        in
-        begin
-          lhs *A (a *A ek)                     ≡⟨ cong (lhs *A_) $ *A-comm a ek ⟩
-          lhs *A (ek *A a)                     ≡⟨ *A-assoc lhs ek a ⟩
-          (lhs *A ek) *A a                     ≡⟨ *A-comm (lhs *A ek) a ⟩
-          a *A (lhs *A ek)                     ≡⟨ cng $ *A-comm lhs ek ⟩
-          a *A (ek *A lhs)                     ≡⟨⟩
-          a *A (ek *A (x +A a *A ej))          ≡⟨ cng $ *A-+A-distrib ek x (a *A ej) ⟩
-          a *A ((ek *A x) +A ek *A (a *A ej))  ≡⟨ cng $ cong (\ φ → φ +A ek *A (a *A ej)) $ *A-comm ek x ⟩
-          a *A ((x *A ek) +A ek *A (a *A ej))  ≡⟨ cng' $ cong (ek *A_) $ *A-comm a ej ⟩
-          a *A ((x *A ek) +A ek *A (ej *A a))  ≡⟨ cng' $ swap2-*A ek ej a ⟩
-          a *A ((x *A ek) +A ej *A (ek *A a))  ≡⟨ cng' $ cong (ej *A_) $ *A-comm ek a ⟩
-          a *A ((x *A ek) +A ej *A (a *A ek))
-        ∎
-
-      postulate
-        -- TODO(sandy): a damn nightmare to prove
-        owch' : ∀ {m n} x xs y ys → evaluate (_*H_ (PX {m} x xs) (PX {n} y ys)) a ≡ evaluate (_*H_ (PX {n} y ys) (PX {m} x xs)) a
-
-      owch : ∀ {m n} j k → evaluate (_*H_ {m} {n} j k) a ≡ evaluate (_*H_ {n} {m} k j) a
-      owch (PC x) (PC x₁) = *A-comm x x₁
-      owch (PC x) (PX {n} x₁ k) rewrite +-identityʳ n =
-        begin
-          x *A x₁ +A a *A evaluate (scalMapHorner (x *A_) k) a  ≡⟨ cong (\ φ → φ +A a *A evaluate (scalMapHorner (x *A_) k) a) $ *A-comm x x₁ ⟩
-          x₁ *A x +A a *A evaluate (scalMapHorner (x *A_) k) a  ≡⟨ cong (\ φ → x₁ *A x +A a *A evaluate (scalMapHorner φ k) a) $ extensionality (\z → *A-comm x z) ⟩
-          x₁ *A x +A a *A evaluate (scalMapHorner (_*A x) k) a
-        ∎
-      owch (PX {m} x j) (PC x₁) rewrite +-identityʳ m =
-        begin
-          x *A x₁ +A a *A evaluate (scalMapHorner (_*A x₁) j) a  ≡⟨ cong (\ φ → φ +A a *A evaluate (scalMapHorner (_*A x₁) j) a) $ *A-comm x x₁ ⟩
-          x₁ *A x +A a *A evaluate (scalMapHorner (_*A x₁) j) a  ≡⟨ cong (\ φ → x₁ *A x +A a *A evaluate (scalMapHorner φ j) a) $ extensionality (\z → *A-comm z x₁) ⟩
-          x₁ *A x +A a *A evaluate (scalMapHorner (x₁ *A_ ) j) a
-        ∎
-      owch (PX {m} x j) (PX {n} x₁ k) =
-        begin
-          evaluate (PX x j *H PX x₁ k) a
-        ≡⟨ owch' x j x₁ k ⟩
-          evaluate (PX x₁ k *H PX x j) a
-        ∎
-
-      remainder : a *A (y *A ej) +A rhs ≡ a *A evaluate (hk +H jhk) a
-      remainder =
-        begin
-          (a *A (y *A ej)) +A rhs                                       ≡⟨⟩
-          (a *A (y *A ej)) +A ((x +A (a *A ej)) *A (a *A ek))           ≡⟨ cong (\ φ → (a *A (y *A ej)) +A φ) more ⟩
-          (a *A (y *A ej)) +A (a *A ((x *A ek) +A (ej *A (a *A ek))))   ≡⟨ sym $ *A-+A-distrib a (y *A ej) ((x *A ek) +A (ej *A (a *A ek))) ⟩
-          a *A ((y *A ej) +A ((x *A ek) +A (ej *A (a *A ek))))          ≡⟨ cng $ swap2-+A (y *A ej) (x *A ek) (ej *A (a *A ek))⟩
-          a *A ((x *A ek) +A ((y *A ej) +A (ej *A (a *A ek))))          ≡⟨ cng' $ cong (\ φ → (φ +A (ej *A (a *A ek)))) $ *A-comm y ej ⟩
-          a *A ((x *A ek) +A ((ej *A y) +A (ej *A (a *A ek))))          ≡⟨ cng' $ sym $ *A-+A-distrib ej y (a *A ek) ⟩
-          a *A ((x *A ek) +A (ej *A (y +A (a *A ek))))                  ≡⟨ cng' $ *A-comm ej (y +A (a *A ek)) ⟩
-          a *A ((x *A ek) +A ((y +A (a *A ek)) *A ej))                  ≡⟨⟩
-          a *A (xka +A ((x₁ +A (a *A ek)) *A ej))                       ≡⟨⟩
-          a *A (xka +A ((x₁ +A (a *A evaluate k a)) *A ej))             ≡⟨⟩
-          a *A (xka +A (evaluate (PX x₁ k) a *A ej))                    ≡⟨⟩
-          a *A (xka +A (evaluate (PX x₁ k) a *A evaluate j a))          ≡⟨ cong (\ φ → a *A (xka +A φ)) $ *A-*H-homo (PX x₁ k) j a ⟩
-          a *A (xka +A evaluate (PX x₁ k *H j) a)                       ≡⟨ cng' $ owch (PX x₁ k) j ⟩
-          a *A (xka +A evaluate (j *H PX x₁ k) a)                       ≡⟨⟩
-          a *A (xka +A evaluate jhk a)                                  ≡⟨⟩
-          a *A ((x *A evaluate k a) +A evaluate jhk a)                  ≡⟨ cng $ cong (_+A evaluate jhk a) $ scale-evaluate x k a ⟩
-          a *A (evaluate (scalMapHorner (x *A_) k) a +A evaluate jhk a) ≡⟨⟩
-          a *A (evaluate hk a +A evaluate jhk a)                        ≡⟨ cng $ +A-+H-homo hk jhk a ⟩
-          a *A evaluate (hk +H jhk) a
-        ∎
-        where
-          cng = cong (a *A_)
-          cng' = cong (\ φ → a *A (xka +A φ))
-
-  isoToConstruction : {N : ℕ} → (x : Poly N) → (a : A) → construct x a ≡ evaluate (normalize x) a
+  isoToConstruction : (x : Poly) → (a : A) → construct x a ≡ evaluate (normalize x) a
   isoToConstruction (con x) a = refl
   isoToConstruction var a = refl
   isoToConstruction (x :+ y) a
@@ -299,7 +206,7 @@ module _ (A : Set) where
           | *A-*H-homo (normalize x) (normalize y) a
           = refl
 
-  solve : {N : ℕ} → (x y : Poly N) → normalize x ≡ normalize y → (a : A) → construct x a ≡ construct y a
+  solve : (x y : Poly) → normalize x ≡ normalize y → (a : A) → construct x a ≡ construct y a
   solve x y eq a =
     begin
       construct x a            ≡⟨ isoToConstruction x a ⟩
@@ -309,10 +216,10 @@ module _ (A : Set) where
     ∎
     where open Eq.≡-Reasoning
 
-  test-a : Poly 2
+  test-a : Poly
   test-a = (var :+ con #1) :* (var :+ con #1)
 
-  test-b : Poly 2
+  test-b : Poly
   test-b = var :* var :+ two :* var :+ con #1
     where
       two = con #1 :+ con #1
